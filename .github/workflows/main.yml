@@ -1,0 +1,54 @@
+name: CI/CD Pipeline
+
+# Когда запускать? При пуше в ветку main
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # 1. Этап проверки (Integration)
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачиваем код (Checkout)
+        uses: actions/checkout@v3
+
+      - name: Устанавливаем Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Устанавливаем зависимости
+        run: |
+          pip install -r requirements.txt
+
+      - name: Проверка стиля кода (Linting)
+        run: |
+          # Проверяем код на ошибки стиля, но не валим сборку (exit-zero)
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Запуск тестов (Pytest)
+        run: |
+          pytest test_main.py
+
+  # 2. Этап доставки (Delivery) - запускается только если tests прошел
+  build-and-push:
+    needs: tests # Ждем успешного завершения тестов
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачиваем код
+        uses: actions/checkout@v3
+
+      - name: Логин в Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Сборка и отправка образа (Build & Push)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          # Замени 'твой_ник' на реальный логин Docker Hub!
+          tags: ${{ secrets.DOCKER_USERNAME }}/cicd-calculator:latest
